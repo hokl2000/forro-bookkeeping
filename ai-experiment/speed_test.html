@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Forró – can this computer run the AI model?</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; line-height: 1.45; }
+  button, select { font-size: 1rem; padding: .4rem .8rem; margin: .3rem 0; }
+  #log { white-space: pre-wrap; background: #f4f4f4; padding: 1rem; font-family: monospace; min-height: 6rem; }
+</style>
+</head>
+<body>
+<h1>Can this computer run the AI model?</h1>
+<p>A speed test for the Forró bookkeeping AI experiment. It loads an open-source language model
+(Qwen3) into this browser with WebLLM and sends it dummy prompts of growing length.
+<b>No data is used and nothing is uploaded.</b> The first time, the model is downloaded
+and kept in the browser's cache; later loads are much faster.</p>
+<p>The real prompts in the experiment are up to about 8,600 characters, so the 8,000-character step is the one that matters.</p>
+
+<p>1. Model:
+  <select id="model">
+    <option value="Qwen3-1.7B-q4f16_1-MLC" selected>Qwen3 1.7B (needs about 2.0 GB GPU memory)</option>
+    <option value="Qwen3-0.6B-q4f16_1-MLC">Qwen3 0.6B (about 1.4 GB GPU memory)</option>
+    <option value="Qwen3-4B-q4f16_1-MLC">Qwen3 4B (about 3.4 GB GPU memory)</option>
+  </select>
+  <button id="load">Load model</button></p>
+<p>2. <button id="run" disabled>Run speed test</button></p>
+<div id="log">Not started.</div>
+<p>Copy the grey box and send it to Holger. If a step fails, close the browser completely before trying again.</p>
+
+<script type="module">
+// Pinned: WebLLM 0.2.83+ fails on low-end integrated GPUs ("Object has already been disposed"),
+// see https://github.com/mlc-ai/web-llm/issues/844
+import * as webllm from "https://esm.run/@mlc-ai/web-llm@0.2.82";
+
+const log = document.getElementById("log");
+const say = (t) => { log.textContent += "\n" + t; };
+let engine = null;
+
+document.getElementById("load").onclick = async () => {
+  log.textContent = "";
+  if (!navigator.gpu) { say("This browser has no WebGPU - the model cannot run here. Try a recent Chrome or Edge."); return; }
+  try {
+    const adapter = await navigator.gpu.requestAdapter();
+    const info = adapter && adapter.info ? adapter.info : {};
+    say(`GPU: ${info.vendor || "?"} ${info.architecture || ""} ${info.description || ""}`.trim());
+  } catch { say("GPU: could not read the GPU name"); }
+  const model = document.getElementById("model").value;
+  say("Loading " + model + " ...");
+  const t0 = performance.now();
+  try {
+    engine = await webllm.CreateMLCEngine(model,
+      { initProgressCallback: (p) => { log.textContent = log.textContent.split("\n[")[0] + "\n[" + p.text + "]"; } },
+      { context_window_size: 4096 });
+  } catch (e) { say("Could not load the model: " + e); return; }
+  say("Model loaded in " + ((performance.now() - t0) / 1000).toFixed(0) + " s.");
+  document.getElementById("run").disabled = false;
+};
+
+document.getElementById("run").onclick = async () => {
+  document.getElementById("run").disabled = true;
+  say("\nSpeed test (" + document.getElementById("model").value + ", context window 4096):");
+  const filler = "Bank text: OVERFØRSEL | Amount: -150.00 DKK -> Gebyr bank\n";
+  for (const chars of [500, 2000, 4000, 8000]) {
+    const system = "Answer only with JSON: {\"post_type\": \"Gebyr bank\"}\n" +
+                   filler.repeat(Math.ceil(chars / filler.length)).slice(0, chars);
+    const t0 = performance.now();
+    try {
+      const r = await engine.chat.completions.create({
+        messages: [{ role: "system", content: system }, { role: "user", content: "Bank text: Gebyr\nAmount: -150.00 DKK" }],
+        temperature: 0, seed: 42, max_tokens: 30, extra_body: { enable_thinking: false },
+      });
+      const secs = (performance.now() - t0) / 1000;
+      const tokens = r.usage ? r.usage.prompt_tokens : null;
+      say(`  ${chars} characters: OK` + (tokens ? ` (${tokens} tokens, ${secs.toFixed(1)} s, ${(tokens / secs).toFixed(0)} tokens/s)` : ` (${secs.toFixed(1)} s)`));
+    } catch (e) {
+      say(`  ${chars} characters: FAILED - ${e}`);
+      say("  Stopped. Close the browser completely before the next try.");
+      return;
+    }
+  }
+  say("Done.");
+};
+</script>
+</body>
+</html>

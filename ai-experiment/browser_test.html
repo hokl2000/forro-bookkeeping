@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Forró – LLM in the browser test</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+  button, select { font-size: 1rem; padding: .4rem .8rem; margin: .3rem 0; }
+  #log { white-space: pre-wrap; background: #f4f4f4; padding: 1rem; font-family: monospace; min-height: 6rem; }
+</style>
+</head>
+<body>
+<h1>Forró – can the model run in the browser?</h1>
+<p>Runs the same test as <code>llm_eval_v2.py</code>, but inside this browser (WebLLM + WebGPU).
+Your file is read locally and never uploaded. Only numbers are shown – never any bank text.</p>
+
+<p>1. Model:
+  <select id="model">
+    <option value="Qwen3-1.7B-q4f16_1-MLC" selected>Qwen3 1.7B (about 2 GB)</option>
+    <option value="Qwen3-4B-q4f16_1-MLC">Qwen3 4B (about 3.4 GB)</option>
+  </select>
+  <button id="load">Load model</button></p>
+<p>2. Test file: <input type="file" id="file" accept=".json"> (browser_test.json)</p>
+<p>3. <button id="run10" disabled>Run first 10 lines</button>
+      <button id="runall" disabled>Run all lines</button>
+      <button id="lentest" disabled>Length test</button></p>
+<div id="log">Not started.</div>
+
+<script type="module">
+import * as webllm from "https://esm.run/@mlc-ai/web-llm@0.2.82";
+
+const log = document.getElementById("log");
+const say = (t) => { log.textContent += "\n" + t; };
+let engine = null, data = null;
+
+function ready() {
+  const ok = engine && data;
+  document.getElementById("run10").disabled = !ok;
+  document.getElementById("runall").disabled = !ok;
+  document.getElementById("lentest").disabled = !engine;
+}
+
+document.getElementById("load").onclick = async () => {
+  log.textContent = "";
+  if (!navigator.gpu) { say("This browser has no WebGPU - the model cannot run here."); return; }
+  const model = document.getElementById("model").value;
+  say("Loading " + model + " (the first time it downloads; later it comes from the browser's cache)...");
+  const t0 = performance.now();
+  try {
+    engine = await webllm.CreateMLCEngine(model,
+      { initProgressCallback: (p) => { log.textContent = log.textContent.split("\n[")[0] + "\n[" + p.text + "]"; } },
+      { context_window_size: 4096 });
+  } catch (e) { say("Could not load the model: " + e); return; }
+  say("Model loaded in " + ((performance.now() - t0) / 1000).toFixed(0) + " s.");
+  ready();
+};
+
+document.getElementById("file").onchange = async (ev) => {
+  try {
+    data = JSON.parse(await ev.target.files[0].text());
+    say("Test file read: " + data.items.length + " lines.");
+  } catch (e) { say("Could not read the file: " + e); data = null; }
+  ready();
+};
+
+async function ask(item) {
+  // No forced JSON format (WebLLM's GrammarMatcher crashed). The prompt still asks for JSON;
+  // the answer is checked here against the list of post types.
+  const reply = await engine.chat.completions.create({
+    messages: [{ role: "system", content: item.system }, { role: "user", content: item.user }],
+    temperature: 0, seed: 42, max_tokens: 60,
+    extra_body: { enable_thinking: false },
+  });
+  const text = (reply.choices[0].message.content || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+  // 1. Proper JSON  2. {"post_type": "..."} somewhere in the text  3. exactly one post type named in the text
+  try { const p = JSON.parse(text).post_type; if (data.post_types.includes(p)) return p; } catch {}
+  const m = text.match(/"post_type"\s*:\s*"([^"]+)"/);
+  if (m && data.post_types.includes(m[1])) return m[1];
+  const named = data.post_types.filter((p) => text.includes(p));
+  const longest = named.sort((a, b) => b.length - a.length)[0];
+  if (longest && named.every((p) => longest.includes(p))) return longest;
+  return "(no valid answer)";
+}
+
+async function run(limit) {
+  const items = data.items.slice(0, limit);
+  say("\nRunning " + items.length + " lines with " + document.getElementById("model").value + " ...");
+  const preds = [];
+  const t0 = performance.now();
+  for (let i = 0; i < items.length; i++) {
+    try { preds.push(await ask(items[i])); }
+    catch (e) { say("Error on line " + (i + 1) + ": " + e); return; }
+    if ((i + 1) % 5 === 0 || i + 1 === items.length) {
+      const s = (performance.now() - t0) / 1000;
+      say(`  ${i + 1}/${items.length} done, ${(s / (i + 1)).toFixed(1)} s per line`);
+    }
+  }
+  const secs = (performance.now() - t0) / 1000;
+  const n = items.length;
+  const ok = items.filter((it, i) => preds[i] === it.truth).length;
+  const okB = items.filter((it) => it.baseline === it.truth).length;
+  say(`\nModel:    ${ok} / ${n} right = ${Math.round(100 * ok / n)} %   (${secs.toFixed(0)} s, ${(secs / n).toFixed(1)} s per line)`);
+  say(`Baseline: ${okB} / ${n} right = ${Math.round(100 * okB / n)} %`);
+  say(`No valid answer: ${preds.filter((p) => p === "(no valid answer)").length} of ${n} lines`);
+  for (const y of [...new Set(items.map((it) => it.year))]) {
+    const idx = items.map((it, i) => i).filter((i) => items[i].year === y);
+    const m = idx.filter((i) => preds[i] === items[i].truth).length;
+    const b = idx.filter((i) => items[i].baseline === items[i].truth).length;
+    say(`  ${y}: model ${m} / ${idx.length}   baseline ${b} / ${idx.length}`);
+  }
+}
+
+// Length test: dummy prompts (no bank text) of growing length; stops at the first failure.
+async function lengthTest() {
+  say("\nLength test (dummy text, context window 4096):");
+  const filler = "Bank text: OVERFØRSEL | Amount: -150.00 DKK -> Gebyr bank\n";
+  for (const chars of [500, 2000, 4000, 8000]) {
+    const system = "Answer only with JSON: {\"post_type\": \"Gebyr bank\"}\n" +
+                   filler.repeat(Math.ceil(chars / filler.length)).slice(0, chars);
+    const t0 = performance.now();
+    try {
+      const r = await engine.chat.completions.create({
+        messages: [{ role: "system", content: system }, { role: "user", content: "Bank text: Gebyr\nAmount: -150.00 DKK" }],
+        temperature: 0, seed: 42, max_tokens: 30, extra_body: { enable_thinking: false },
+      });
+      const used = r.usage ? r.usage.prompt_tokens + " tokens" : "tokens unknown";
+      say(`  ${chars} characters: OK (${used}, ${((performance.now() - t0) / 1000).toFixed(1)} s)`);
+    } catch (e) {
+      say(`  ${chars} characters: FAILED - ${e}`);
+      say("  Stopped. Close Chrome completely before the next try (the GPU connection may be broken).");
+      return;
+    }
+  }
+}
+
+document.getElementById("lentest").onclick = lengthTest;
+document.getElementById("run10").onclick = () => run(10);
+document.getElementById("runall").onclick = () => run(data.items.length);
+</script>
+</body>
+</html>

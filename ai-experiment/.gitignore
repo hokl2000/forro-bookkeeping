@@ -1,0 +1,5 @@
+# Real club data never goes in the repo
+*.csv
+*.json
+*.xlsx
+__pycache__/

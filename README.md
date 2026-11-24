@@ -24,10 +24,11 @@ This page books what it can recognise and leaves only the rest to the treasurer.
    - a Zettle payout is matched by amount and date and split by payment time (class time, the Globen social on the first Friday) plus the fee,
    - the event (Globen, Beginner classes) is filled in where it is known.
 3. **Leaves the rest to the treasurer** in a review table: yellow lines need a category, every automatic line shows *why* it was booked and can be changed.
-4. **Checks before the file is made:** every line has a category, one financial year (1 August – 31 July), and the bookings end at the bank's own balance. A bank file with a missing line is refused when it is added.
-5. **Instructor contracts:** for each workshop with an instructor payment, it compares what was paid with the contract (a % of the profit, or a fixed amount) and warns if they differ.
-6. **Save progress** to a file and continue later, on any computer.
-7. **Download Statements:** the year's rows in the exact layout of the Google Sheet's Statements tab (Danish post types, events, running balance).
+4. **AI suggestions for the yellow lines (optional):** an open-source language model (Qwen3 1.7B, via [WebLLM](https://github.com/mlc-ai/web-llm)) runs in the treasurer's browser and suggests a category for lines that have a bank text. It learns from the club's earlier years: the treasurer adds earlier Statements tabs as CSV, and real lines from them go into the prompt as examples, together with a one-line description of each post type. Nothing is uploaded. **Every suggestion must be confirmed** (one by one or "Confirm all"); the download is blocked until it is. In the test it was right 38 of 87 times against 28 for a simple rule – see [ai-experiment](ai-experiment/) for how it was measured, and why it is not allowed to book on its own.
+5. **Checks before the file is made:** every line has a category, one financial year (1 August – 31 July), and the bookings end at the bank's own balance. A bank file with a missing line is refused when it is added.
+6. **Instructor contracts:** for each workshop with an instructor payment, it compares what was paid with the contract (a % of the profit, or a fixed amount) and warns if they differ.
+7. **Save progress** to a file and continue later, on any computer.
+8. **Download Statements:** the year's rows in the exact layout of the Google Sheet's Statements tab (Danish post types, events, running balance).
 
 ## Use it
 
@@ -52,6 +53,7 @@ python test_read_review.py
 python test_year_end.py
 python test_read_bank.py
 python test_read_documents.py
+python test_ai_suggest.py
 ```
 
 ## Files
@@ -64,6 +66,8 @@ python test_read_documents.py
 | `match.py`, `classify.py` | Match bank lines to MobilePay/Zettle and book them |
 | `review.py`, `post_types.py`, `event_types.py` | Categories, Danish post types and events (copied from the Google Sheet) |
 | `events.py` | Instructor contract check |
+| `ai_suggest.py` | AI suggestions: post-type descriptions, examples from earlier Statements files, prompt, answer check |
+| `ai-experiment/` | How the AI was chosen and measured (scripts, results, browser speed test) |
 | `year_end.py`, `read_review.py`, `run.py` | The command-line version the page grew out of |
 | `read_documents.py` | Reads BilletFix statements (not used by the page yet) |
 

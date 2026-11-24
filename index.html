@@ -65,6 +65,14 @@
   .legend { color: var(--muted); font-size: .88rem; margin: .2rem 0 .8rem; }
   td input.receipt { width: 5rem; font: inherit; padding: .3rem .4rem; border: 1px solid var(--line); border-radius: 6px; }
   .actions { margin: .4rem 0 1rem; }
+  #ai-box { border: 1px solid var(--line); border-radius: 10px; padding: .8rem 1rem; margin: 0 0 1rem; background: #f7f5ff; }
+  #ai-box h3 { margin: 0 0 .3rem; color: var(--blue); }
+  #ai-box button { margin: .4rem .4rem 0 0; }
+  #ai-status { margin: .6rem 0 0; font-weight: 600; }
+  tr.ai td { background: #f1edff; }
+  tr.ai td:first-child { box-shadow: inset 4px 0 0 #6b4fbb; }
+  .ai-tag { display: block; color: #4b3596; font-size: .8rem; margin-top: .2rem; }
+  .ai-tag button { padding: .15rem .6rem; font-size: .8rem; margin-left: .3rem; }
 </style>
 </head>
 <body>
@@ -121,7 +129,7 @@
 <script>
 // Our Python files, fetched from this folder.
 const PY_FILES = ["read_bank.py", "read_mobilepay.py", "match.py", "read_zettle.py", "event_types.py",
-                  "classify.py", "review.py", "events.py", "read_review.py", "year_end.py", "post_types.py", "web.py"];
+                  "classify.py", "review.py", "events.py", "read_review.py", "year_end.py", "post_types.py", "ai_suggest.py", "web.py"];
 // Exact package versions (pure Python), so the page behaves the same every time.
 const WHEELS = [
   "https://files.pythonhosted.org/packages/c1/8b/5fe2cc11fee489817272089c4203e679c63b570a5aaeb18d852ae3cbba6a/et_xmlfile-2.0.0-py3-none-any.whl",
@@ -211,11 +219,12 @@ function useProgress(out) {
 function reviewTable() {
   const rows = bookings.map((b, i) => {
     const todo = !categoryList.includes(b.category), changed = b.code_category && b.category !== b.code_category;
-    const was = changed ? `<span class="was">was: ${esc(b.code_category)}</span>` : "";
+    const aiOpen = aiOpenLine(b);
+    const was = changed ? `<span class="was">was: ${esc(b.code_category)}</span>` : aiTag(b, i);
     const first = i === 0 || bookings[i - 1].line !== b.line;
     const receipt = first ? `<input class="receipt" data-i="${i}" value="${esc(b.receipt)}" inputmode="numeric"
                                     aria-label="Receipt number for line ${i + 1}">` : "";
-    return `<tr class="${todo ? "todo" : changed ? "changed" : ""}">
+    return `<tr class="${todo ? "todo" : aiOpen ? "ai" : changed ? "changed" : ""}">
       <td>${i + 1}</td><td>${receipt}</td><td>${esc(b.date)}</td><td>${esc(b.text)}</td>
       <td class="num">${b.amount.toFixed(2)}</td>
       <td><input class="cat" list="categories" data-i="${i}" value="${esc(b.category)}"
@@ -232,8 +241,12 @@ function reviewTable() {
 function checkReview() {
   const res = JSON.parse(py.globals.get("web").check_review(JSON.stringify(bookings)));
   const status = document.getElementById("review-status");
-  status.className = res.ok ? "ok" : "bad";
-  status.textContent = (res.ok ? "✓ " : "") + res.message;
+  const open = bookings.filter(aiOpenLine).length;
+  const ok = res.ok && open === 0;
+  status.className = ok ? "ok" : "bad";
+  status.textContent = (ok ? "✓ " : "") + (res.ok ? "" : res.message + " ")
+    + (open ? `${open} AI suggestion(s) still need your OK – click Confirm on the purple lines, or Confirm all.` : "")
+    + (res.ok && !open ? res.message : "");
   for (const input of document.querySelectorAll("input.cat")) {
     const value = input.value;
     input.classList.toggle("invalid", value !== "" && !categoryList.includes(value));
@@ -273,9 +286,10 @@ function showReview() {
     <p class="legend">Not finished? Click <b>Save progress</b> and keep the file, for example in Dropbox (1. Economy).
        Next time, add it at the top of this page.</p>
     <p id="new-events"></p>
+    <section id="ai-box"></section>
     <datalist id="categories">${categoryList.map(c => `<option value="${esc(c)}">`).join("")}</datalist>
     <datalist id="events">${eventList.map(c => `<option value="${esc(c)}">`).join("")}</datalist>
-    ${reviewTable()}
+    <div id="review-table">${reviewTable()}</div>
     <div id="contracts"></div>`;
   box.oninput = event => {
     if (event.target.dataset.contract) {        // a field in the contracts box
@@ -297,6 +311,7 @@ function showReview() {
     if (event.target.classList.contains("event")) { renderContracts(); return; }
     if (!event.target.classList.contains("cat")) return;
     const i = Number(event.target.dataset.i), row = event.target.closest("tr"), b = bookings[i];
+    if (b.ai) b.ai_ok = true;                                  // she chose the category herself
     const changed = b.code_category && b.category !== b.code_category;
     row.className = !categoryList.includes(b.category) ? "todo" : changed ? "changed" : "";
     const eventInput = row.querySelector("input.event");   // fees and running costs never get an event
@@ -305,11 +320,20 @@ function showReview() {
     const old = row.querySelector(".was");
     if (old) old.remove();
     if (changed) event.target.insertAdjacentHTML("afterend", `<span class="was">was: ${esc(b.code_category)}</span>`);
+    const tag = row.querySelector(".ai-tag");
+    if (tag) tag.outerHTML = aiTag(b, i);
     checkReview();
     renderContracts();
+    renderAiBox();
+  };
+  box.onclick = event => {
+    if (event.target.classList.contains("ai-ok")) confirmAi([Number(event.target.dataset.i)]);
+    if (event.target.id === "ai-confirm-all") confirmAi(bookings.map((b, i) => i).filter(i => aiOpenLine(bookings[i])));
+    if (event.target.id === "ai-run") runAi();
   };
   checkReview();
   renderContracts();
+  renderAiBox();
   document.getElementById("download-statements").onclick = downloadStatements;
   document.getElementById("save-progress").onclick = saveProgress;
 }
@@ -355,7 +379,10 @@ function download(path, name) {
 function saveProgress() {
   const d = new Date(), pad = n => String(n).padStart(2, "0");
   const saved = `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  py.globals.get("web").write_progress(JSON.stringify(bookings), balance.opening, balance.closing,
+  const open = bookings.filter(aiOpenLine).length;   // unconfirmed AI suggestions are saved as yellow lines
+  const toSave = bookings.map(b => aiOpenLine(b) ? { ...b, category: "" } : b);
+  if (open) setAiStatus(`${open} AI suggestion(s) you hadn't confirmed were saved as yellow lines – run the AI again next time, or choose them yourself.`, false);
+  py.globals.get("web").write_progress(JSON.stringify(toSave), balance.opening, balance.closing,
                                        saved, "/app/progress-out.xlsx", JSON.stringify(contracts));
   download("/app/progress-out.xlsx",
            `Forro progress ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.xlsx`);
@@ -363,6 +390,7 @@ function saveProgress() {
 
 function downloadStatements() {
   const web = py.globals.get("web");
+  if (bookings.some(aiOpenLine)) { checkReview(); document.getElementById("review-status").scrollIntoView({ block: "center" }); return; }
   const check = JSON.parse(web.check_statements(JSON.stringify(bookings), balance.opening, balance.closing));
   const status = document.getElementById("review-status");
   status.className = check.ok ? "ok" : "bad";
@@ -373,6 +401,126 @@ function downloadStatements() {
   const added = JSON.parse(web.new_events(JSON.stringify(bookings)));
   document.getElementById("new-events").textContent = added.length
     ? `Before you paste: add these to the 'event types' tab in the Finances sheet: ${added.join(", ")}.` : "";
+}
+
+// ---------- AI suggestions for the yellow lines (ai_suggest.py; tested in ai-experiment/) ----------
+// The model runs here in the browser (WebLLM + WebGPU). Pinned to 0.2.82: 0.2.83+ fails on low-end
+// integrated GPUs (https://github.com/mlc-ai/web-llm/issues/844).
+const WEBLLM = "https://esm.run/@mlc-ai/web-llm@0.2.82";
+const AI_MODEL = "Qwen3-1.7B-q4f16_1-MLC";
+let aiEngine = null, aiHistory = false, aiBusy = false, aiMessage = "", aiMessageOk = true;
+
+const aiOpenLine = b => Boolean(b.ai) && !b.ai_ok && b.category === b.ai;   // a suggestion she hasn't confirmed
+const aiTodo = () => bookings.filter(b => b.reason === "No rule or document matched" && !b.category
+                                          && String(b.text).trim()).length;
+
+function aiTag(b, i) {
+  if (!b.ai) return "";
+  if (aiOpenLine(b)) return `<span class="ai-tag">AI suggestion <button type="button" class="ai-ok" data-i="${i}">Confirm</button></span>`;
+  return `<span class="ai-tag">${b.category === b.ai ? "AI suggestion – confirmed" : "AI suggested: " + esc(b.ai)}</span>`;
+}
+
+function setAiStatus(text, good) {
+  aiMessage = text; aiMessageOk = good;
+  const p = document.getElementById("ai-status");
+  if (p) { p.textContent = text; p.className = good ? "msg ok" : "msg bad"; }
+}
+
+function renderAiBox() {
+  const box = document.getElementById("ai-box");
+  if (!box) return;
+  const todo = aiTodo(), open = bookings.filter(aiOpenLine).length;
+  if (!todo && !open && !bookings.some(b => b.ai)) { box.style.display = "none"; return; }
+  box.style.display = "block";
+  if (box.dataset.built !== "yes") {
+    box.dataset.built = "yes";
+    box.innerHTML = `<h3>AI suggestions for the yellow lines (optional)</h3>
+      <p class="legend">An AI model can suggest a category for yellow lines that have a bank text. It runs here in your browser –
+        nothing is uploaded. It learns from the club's earlier years: add the <b>Statements</b> tabs of earlier years
+        (in the Google Sheet: open a Statements tab → <b>File → Download → CSV</b>; you can choose several files).
+        The first time, the model is downloaded (about 2 GB) and needs a fairly new computer.
+        <b>You confirm every suggestion</b> – in our test it was right about 4 times in 10.</p>
+      <label class="drop">Drag earlier Statements files (CSV) here, or click to choose them<input type="file" accept=".csv" multiple></label>
+      <p><button id="ai-run" type="button" disabled></button><button id="ai-confirm-all" type="button"></button></p>
+      <p id="ai-status"></p>`;
+    const drop = box.querySelector(".drop"), input = drop.querySelector("input");
+    input.addEventListener("change", () => input.files.length && useHistory(input.files));
+    drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+    drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+    drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over");
+                                         if (e.dataTransfer.files.length) useHistory(e.dataTransfer.files); });
+  }
+  const run = document.getElementById("ai-run"), all = document.getElementById("ai-confirm-all");
+  run.textContent = `Get AI suggestions for ${todo} line(s)`;
+  run.disabled = aiBusy || !aiHistory || !todo;
+  all.textContent = `Confirm all AI suggestions (${open})`;
+  all.style.display = open ? "inline-block" : "none";
+  all.disabled = aiBusy;
+  if (aiMessage) setAiStatus(aiMessage, aiMessageOk);
+}
+
+async function useHistory(files) {
+  const list = [];
+  for (let n = 0; n < files.length; n++) {
+    const path = `/app/data/history_${n}.csv`;
+    py.FS.writeFile(path, new Uint8Array(await files[n].arrayBuffer()));
+    list.push([path, files[n].name]);
+  }
+  const res = JSON.parse(py.globals.get("web").ai_history(JSON.stringify(list)));
+  aiHistory = res.ok;
+  setAiStatus((res.ok ? "✓ " : "✗ ") + res.message, res.ok);
+  renderAiBox();
+}
+
+function confirmAi(indexes) {
+  for (const i of indexes) bookings[i].ai_ok = true;
+  document.getElementById("review-table").innerHTML = reviewTable();
+  checkReview();
+  renderAiBox();
+}
+
+async function runAi() {
+  if (!navigator.gpu) {
+    setAiStatus("This browser can't run the AI (no WebGPU). Try a recent Chrome or Edge – or choose the categories yourself.", false);
+    return;
+  }
+  const web = py.globals.get("web");
+  const job = JSON.parse(web.ai_prompts(JSON.stringify(bookings)));
+  if (!job.items.length) return;
+  aiBusy = true; renderAiBox();
+  let made = 0, none = 0;
+  try {
+    if (!aiEngine) {
+      const webllm = await import(WEBLLM);
+      aiEngine = await webllm.CreateMLCEngine(AI_MODEL,
+        { initProgressCallback: p => setAiStatus("Loading the AI model (only slow the first time): " + p.text, true) },
+        { context_window_size: 4096 });
+    }
+    const t0 = performance.now();
+    for (let k = 0; k < job.items.length; k++) {
+      const per = k ? ` – about ${((performance.now() - t0) / 1000 / k).toFixed(0)} s per line` : "";
+      setAiStatus(`AI is working on line ${k + 1} of ${job.items.length}${per} …`, true);
+      const reply = await aiEngine.chat.completions.create({
+        messages: [{ role: "system", content: job.system }, { role: "user", content: job.items[k].user }],
+        temperature: 0, seed: 42, max_tokens: 60, extra_body: { enable_thinking: false },
+      });
+      const category = web.ai_answer(reply.choices[0].message.content || "");
+      const b = bookings[job.items[k].i];
+      if (category && !b.category) { b.category = category; b.ai = category; b.ai_ok = false; made++; }
+      else none++;
+      document.getElementById("review-table").innerHTML = reviewTable();
+      checkReview();
+    }
+    setAiStatus(`✓ ${made} AI suggestion(s) – check each purple line and click Confirm, or change the category.`
+                + (none ? ` ${none} line(s) got no usable answer – choose those yourself.` : ""), true);
+  } catch (error) {
+    console.error(error);
+    setAiStatus("✗ The AI stopped: " + error + ". The suggestions so far are kept. If you try again, "
+                + "close the browser completely first. You can always choose the categories yourself.", false);
+  }
+  aiBusy = false;
+  renderAiBox();
+  renderContracts();
 }
 
 start().catch(error => {

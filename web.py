@@ -20,6 +20,7 @@ from events import INSTRUCTOR, check_contract, expected_instructor_payment, pars
 from post_types import POST_TYPES
 from review import CATEGORIES
 from year_end import financial_year
+import ai_suggest
 
 warnings.filterwarnings("ignore", message="Workbook contains no default style")
 
@@ -350,3 +351,34 @@ def read_progress(path):
                                               f"{done} of {len(bookings)} lines have a category.",
                        "bookings": bookings, "opening": opening, "closing": closing,
                        "contracts": contracts})
+
+
+# AI suggestions for the yellow lines (ai_suggest.py). The examples are kept here, in the browser only.
+_history = []
+
+
+def ai_history(paths_json):
+    """The treasurer's Statements files of earlier years (CSV) -> examples for the AI."""
+    global _history
+    _history, messages = [], []
+    for path, name in json.loads(paths_json):
+        examples, message = ai_suggest.read_history(path)
+        _history += examples
+        messages.append(f"{name}: {message}")
+    if not _history:
+        return result(False, " ".join(messages))
+    prompt, used = ai_suggest.system_prompt(_history)
+    return result(True, f"{len(_history)} example lines read; the AI gets the newest {used}. " + " ".join(messages))
+
+
+def ai_prompts(bookings_json):
+    """The prompts for the yellow lines the AI may suggest for: {system, items: [{i, user}]}."""
+    prompt, _ = ai_suggest.system_prompt(_history)
+    items = [{"i": i, "user": ai_suggest.user_message(b)}
+             for i, b in enumerate(json.loads(bookings_json)) if ai_suggest.needs_ai(b)]
+    return json.dumps({"system": prompt, "items": items})
+
+
+def ai_answer(text):
+    """The model's answer -> a category from the page's list, or "" (no valid answer)."""
+    return ai_suggest.answer(text)

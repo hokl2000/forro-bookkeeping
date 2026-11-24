@@ -55,23 +55,35 @@ The rule for choosing a model was fixed before the run: **the smallest model tha
 - 87 lines and 21 of the club's 44 post types.
 - The weak spot is *Voucher Globen*: the model got 6 of 18, the amount rule 18 of 18. Combining the rule and the model is the obvious next step – and must also be tested on new lines.
 
-### 3. Can it run in the treasurer's browser? Not on a PC with integrated graphics
-The bookkeeping page runs in the browser, so the model should too (WebLLM + WebGPU, `browser_test.html`). On the test PC (integrated Intel GPU):
+### 3. Can it run in the treasurer's browser? Yes – on a modern PC
+The bookkeeping page runs in the browser, so the model should too: WebLLM + WebGPU, nothing installed, nothing uploaded (`browser_test.html`).
 
-| Prompt | Tokens | Result | Time |
-|---|---|---|---|
-| 500 characters | 273 | OK | 34 s |
-| 2,000 characters | 945 | OK | 109 s |
-| 4,000 characters | 1,843 | OK | 238 s |
-| 8,000 characters | – | crashed | – |
+**Speed** (`speed_test.html`, dummy prompts):
 
-The real prompts are up to about 8,600 characters, so they did not run at all. Two problems were met on the way: WebLLM 0.2.83+ fails on low-end integrated GPUs ([web-llm issue #844](https://github.com/mlc-ai/web-llm/issues/844); pinned to 0.2.82), and with a forced JSON schema the first answer failed with a `GrammarMatcher` error (removed; the answer is now checked against the post-type list instead).
+| Prompt | Older PC, integrated Intel GPU | Newer PC, integrated Intel Xe2 GPU |
+|---|---|---|
+| 500 characters | 34 s | 2.4 s |
+| 2,000 characters | 109 s | 5.9 s |
+| 4,000 characters | 238 s | 11.6 s |
+| 8,000 characters | crashed | 25 s (3,637 tokens) |
 
-**Try your own computer:** [speed_test.html](https://hokl2000.github.io/forro-bookkeeping/ai-experiment/speed_test.html) runs the same length test with dummy text – no data, nothing uploaded.
+**Accuracy in the browser** (newer PC, the same 87 lines and prompts as `llm_eval_v2.py`):
+
+| | right | 22/23 (40) | 23/24 (30) | 24/25 (17) | time per line |
+|---|---|---|---|---|---|
+| Baseline | 28 (32 %) | 11 | 11 | 6 | – |
+| Qwen3 1.7B, Ollama | 42 (48 %) | 13 | 15 | 14 | 7.3 s |
+| **Qwen3 1.7B, browser** | **38 (44 %)** | 11 | 13 | 14 | 11.3 s |
+
+0 of 87 answers were outside the post-type list. The browser version is 4 lines below Ollama – it uses a different quantised build of the model and no forced answer format – and identical on 2024/25, the year whose bank text is most like today's.
+
+On the older PC the real prompts did not run at all. Two problems were met on the way: WebLLM 0.2.83+ fails on low-end integrated GPUs ([web-llm issue #844](https://github.com/mlc-ai/web-llm/issues/844); pinned to 0.2.82), and with a forced JSON schema the first answer failed with a `GrammarMatcher` error (removed; the answer is now checked against the post-type list instead).
+
+**Try your own computer:** [speed_test.html](https://hokl2000.github.io/forro-bookkeeping/ai-experiment/speed_test.html) runs the length test with dummy text – no data, nothing uploaded.
 
 ## What's next
-1. Run the speed test on computers with a separate graphics card or Apple silicon.
-2. Decide: a lighter browser version (shorter prompt, smaller model – measured first) or a local helper with Ollama.
+1. Run the speed test on the treasurer's computer.
+2. Add the model as an "AI suggestion" for the yellow lines on the bookkeeping page – the treasurer accepts or corrects it.
 3. Test on new 2026/27 lines, including rule + model combined.
 
 ## Files
@@ -82,7 +94,7 @@ The real prompts are up to about 8,600 characters, so they did not run at all. T
 | `llm_eval.py` | Experiment 2, version 1: Qwen3 via Ollama, no club knowledge. |
 | `llm_eval_v2.py` | Experiment 2, version 2: with post-type descriptions and other-year examples. |
 | `export_browser_test.py` | Writes the same prompts as `llm_eval_v2.py` to a local JSON file for the browser test. |
-| `browser_test.html` | Experiment 3: the real test in the browser (reads the local JSON file). |
+| `browser_test.html` | Experiment 3: the real test in the browser (reads the local JSON file; nothing is uploaded). |
 | `speed_test.html` | Length test with dummy text – open it on any computer. |
 
 ## Run it yourself

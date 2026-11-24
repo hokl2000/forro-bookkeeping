@@ -1,7 +1,9 @@
+import re
 from datetime import datetime
 from event_types import AUTO_EVENTS
 from match import match_mobilepay
 
+MOBILEPAY_LIKE = re.compile(r"^\d{15,}$")   # the bank text is only a long transfer reference
 ZETTLE_MAX_DAYS = 3  # the bank line comes 0-3 days after Zettle's payout date
 
 # MobilePay's own categories -> Forró's accounts. "Other" is left for the treasurer.
@@ -60,4 +62,7 @@ def bookings_for(line, mobilepay_transfers, zettle_payouts):
         result.append(booking(line, "Zettle fee", payout["fees"], reason))
         return result
 
+    if MOBILEPAY_LIKE.match(text):
+        return [booking(line, "", amount, "Looks like a MobilePay transfer reference, but it isn't in the "
+                                          "MobilePay file – check that the MobilePay report covers this date")]
     return [booking(line, "", amount, "No rule or document matched")]

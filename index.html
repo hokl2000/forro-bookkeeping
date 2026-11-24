@@ -232,7 +232,7 @@ function reviewTable() {
       <td><input class="event" list="events" data-i="${i}" value="${esc(noEvent.includes(b.category) ? "" : b.event)}"
                  ${noEvent.includes(b.category) ? "disabled" : ""} aria-label="Event for line ${i + 1}"></td>
       <td><input class="note" data-i="${i}" value="${esc(b.comment)}" aria-label="Comment for line ${i + 1}"></td>
-      <td class="why">${b.code_category ? esc(b.reason) : ""}</td></tr>`;
+      <td class="why">${b.code_category || b.reason.startsWith("Looks like") ? esc(b.reason) : ""}</td></tr>`;
   }).join("");
   return `<table><thead><tr><th>#</th><th>Receipt</th><th>Date</th><th>Text</th><th class="num">Amount</th>
           <th>Category</th><th>Event</th><th>Comment</th><th>Why (automatic)</th></tr></thead><tbody>${rows}</tbody></table>`;
@@ -438,8 +438,7 @@ function renderAiBox() {
       <p class="legend">An AI model can suggest a category for yellow lines that have a bank text. It runs here in your browser –
         nothing is uploaded. It learns from the club's earlier years: add the <b>Statements</b> tabs of earlier years
         (in the Google Sheet: open a Statements tab → <b>File → Download → CSV</b>; you can choose several files).
-        The first time, the model is downloaded (about 2 GB) and needs a fairly new computer.
-        <b>You confirm every suggestion</b> – in our test it was right about 4 times in 10.</p>
+        The first time, the model is downloaded (about 2 GB).</p>
       <label class="drop">Drag earlier Statements files (CSV) here, or click to choose them<input type="file" accept=".csv" multiple></label>
       <p><button id="ai-run" type="button" disabled></button><button id="ai-confirm-all" type="button"></button></p>
       <p id="ai-status"></p>`;

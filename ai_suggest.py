@@ -15,7 +15,9 @@ from datetime import date
 from post_types import POST_TYPES
 
 # Danish post type -> one-line description (written with Holger, 22 Nov 2026).
-# Only the post types the AI was tested on (ai-experiment/README.md); the treasurer picks any other one herself.
+# The post types the AI was tested on (ai-experiment/README.md), plus Lån and Overførsel mellem egne konti
+# (added 24 Nov 2026 after the first real test: the bank change in Oct 2026 brought a loan and a transfer).
+# The treasurer picks any other post type herself.
 DESCRIPTIONS = {
     "Flybilletter": "plane tickets, e.g. for teachers or artists flying in",
     "Forplejning til diverse": "food and snacks for events, volunteers and meetings",
@@ -39,6 +41,8 @@ DESCRIPTIONS = {
     "Voucher Globen": "payment to Café Globen for the drink vouchers guests get with their entrance; "
                       "bank text often 'Drinks Globen'",
     "Web-hotel og domænenavne": "website hosting and domain names",
+    "Lån": "a loan to the association, or paying a loan back (e.g. 'Loan from …')",
+    "Overførsel mellem egne konti": "moving money between the association's own bank accounts, e.g. when changing bank",
 }
 
 # Older spellings in the Statements tabs -> today's post type (agreed with Holger 22 Nov 2026)

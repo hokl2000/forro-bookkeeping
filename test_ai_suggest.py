@@ -60,6 +60,8 @@ def test_answer_checks():
     assert a("Salg entre or Gebyr bank") == ""                 # two post types = no answer
     assert a('{"post_type": "Bank fee"}') == ""               # not one of the post types
     assert a("") == ""
+    assert a('{"post_type": "Lån"}') == "Loan (liability)"
+    assert a('{"post_type": "Overførsel mellem egne konti"}') == "Transfer between own accounts"
 
 
 def test_which_lines_get_a_suggestion():
@@ -70,6 +72,16 @@ def test_which_lines_get_a_suggestion():
     assert not ai_suggest.needs_ai({**yellow, "text": " "})                       # no bank text
     assert not ai_suggest.needs_ai({**yellow, "reason": "Match: Zettle payout 01.11.2026, check"})
     assert ai_suggest.user_message(yellow) == "Bank text: Drinks Globen\nAmount: -960.00 DKK\nDate: 2026-11-02"
+
+
+def test_reference_number_lines_are_not_sent_to_the_ai():
+    from classify import bookings_for
+    line = {"date": "09.11.2026", "text": "0200110044001061263", "amount": 346.53, "balance": 0.0}
+    b = bookings_for(line, {}, [])[0]
+    assert b["category"] == "" and b["reason"].startswith("Looks like a MobilePay transfer reference")
+    assert not ai_suggest.needs_ai(b)
+    other = bookings_for({**line, "text": "Loan from xxx"}, {}, [])[0]
+    assert other["reason"] == "No rule or document matched" and ai_suggest.needs_ai(other)
 
 
 def test_web_flow():
@@ -92,5 +104,6 @@ if __name__ == "__main__":
     test_prompt_keeps_newest_examples_under_the_limit()
     test_answer_checks()
     test_which_lines_get_a_suggestion()
+    test_reference_number_lines_are_not_sent_to_the_ai()
     test_web_flow()
-    print("OK - 6 AI suggestion tests passed")
+    print("OK - 7 AI suggestion tests passed")

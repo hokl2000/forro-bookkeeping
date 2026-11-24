@@ -1,8 +1,10 @@
 """AI suggestions for the yellow lines (bank lines no rule or document could book).
 
 The model (Qwen3 1.7B) runs in the treasurer's browser with WebLLM; this file builds its prompts
-and checks its answers. Same set-up as measured in ai-experiment/ (llm_eval_v2.py + browser_test.html):
-a one-line description per post type + real lines from earlier years as examples.
+and checks its answers. Built on the set-up measured in ai-experiment/ (llm_eval_v2.py + browser_test.html):
+a one-line description per post type + real lines from earlier years as examples. Differences: 22 post types
+(Lån and Overførsel mellem egne konti added, Renter dropped), and the examples come from the treasurer's own
+Statements files, newest first up to MAX_PROMPT characters. This version has not been re-measured.
 
 The examples come from the treasurer's own Statements files of earlier years, read in her browser.
 They contain names, so they are never part of this repo.

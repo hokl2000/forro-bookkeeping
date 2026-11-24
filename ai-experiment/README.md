@@ -1,6 +1,6 @@
 # AI experiment: suggesting post types for bank lines
 
-The bookkeeping page books most bank lines with fixed rules (MobilePay, Zettle, Café Globen). The lines that are left – the "yellow lines" – the volunteer treasurer has to categorise by hand into one of the club's post types (Danish bookkeeping categories such as *Omkostning til bands* or *Gebyr bank*).
+The bookkeeping page books the bank lines it can recognise with fixed rules (MobilePay, Zettle, Café Globen). The lines that are left – the "yellow lines" – the volunteer treasurer has to categorise by hand into one of the club's post types (Danish bookkeeping categories such as *Omkostning til bands* or *Gebyr bank*).
 
 This folder is the experiment behind one question: **can an AI suggest the right post type for those lines, so the treasurer only has to accept or correct it?**
 
@@ -31,7 +31,7 @@ Every result is compared with a **baseline**, a simple rule: *if the same amount
 | Model | 20 / 39 (51 %) |
 | Baseline | 18 / 39 (46 %) |
 
-Two lines apart on 39 is not a real difference. Without the text (`--no-text`) the result was exactly the same, and a small change in the input data moved it by 4 lines. Too little data for this approach.
+Two lines apart on 39 is not a real difference. Without the text (`--no-text`, run on a copy with names removed) the result was exactly the same, and a small change in the input data moved it by 4 lines. Too little data for this approach.
 
 ### 2. A local open-source language model (Qwen3 via Ollama)
 Test set: the 87 lines that have bank text. The model gets the bank text, amount and date and must choose one of the 21 post types used in the files.
@@ -77,14 +77,32 @@ The bookkeeping page runs in the browser, so the model should too: WebLLM + WebG
 
 0 of 87 answers were outside the post-type list. The browser version is 4 lines below Ollama – it uses a different quantised build of the model and no forced answer format – and identical on 2024/25, the year whose bank text is most like today's.
 
-On the older PC the real prompts did not run at all. Two problems were met on the way: WebLLM 0.2.83+ fails on low-end integrated GPUs ([web-llm issue #844](https://github.com/mlc-ai/web-llm/issues/844); pinned to 0.2.82), and with a forced JSON schema the first answer failed with a `GrammarMatcher` error (removed; the answer is now checked against the post-type list instead).
+On the older PC the real prompts did not run at all. Two problems were met on the way: WebLLM 0.2.83+ fails on low-end integrated GPUs ([web-llm issue #844](https://github.com/mlc-ai/web-llm/issues/844); pinned to 0.2.82), and with a forced JSON schema the first answer failed with a `GrammarMatcher` error on the newest WebLLM version (cause not confirmed). The forced format was removed; the answer is now checked against the post-type list instead.
 
 **Try your own computer:** [speed_test.html](https://hokl2000.github.io/forro-bookkeeping/ai-experiment/speed_test.html) runs the length test with dummy text – no data, nothing uploaded.
 
+### 4. Can the model's confidence decide which lines to book automatically? No
+`llm_eval_v3.py` asks the same 87 lines again (Ollama, Qwen3 1.7B, no forced answer format – like the browser) and reads the model's log probabilities: how sure it is of the post type it chose. If lines above a threshold were booked without the treasurer:
+
+| Book automatically when the model is at least … sure | Lines booked automatically | Of those, wrong |
+|---|---|---|
+| 99 % | 36 of 87 | 12 |
+| 95 % | 59 of 87 | 25 |
+| 90 % | 69 of 87 | 32 |
+
+Even at 99 % it was wrong one time in three – the small model is overconfident. So **the treasurer confirms every suggestion**; nothing is booked by the AI alone. (When the model and the amount rule agreed: 15 lines, 2 wrong.)
+
+Qwen3 4B could not be tested this way: without a forced format it writes its reasoning first, even with thinking switched off, so no answer came within the token limit. Letting it finish would make it far too slow for the browser.
+
+### 5. In the live page
+The model now runs in the bookkeeping page itself (`../ai_suggest.py`, `../index.html`): purple lines with a suggestion, Confirm or Confirm all, and the download is blocked until every suggestion is confirmed or changed. First real test (a newer PC, the current year's files): 3 suggestions, 1 right. The 2 misses were fixed before publishing: *Loan* was not on the model's list of post types (added, with *Transfer between own accounts*), and one bank text was only a transfer reference number – such lines now get a rule-based hint ("looks like a MobilePay payout missing from the MobilePay file") instead of an AI guess.
+
+The page's set-up is built on the one measured above, with two differences: 22 post types instead of 21 (*Loan* and *Transfer between own accounts* added, *Renter* dropped because it is no longer a post type), and the examples come from the Statements files the treasurer adds (newest first, up to 8,600 characters). That version has so far only had the 3-line test above – the 38/87 and 42/87 results are from the experiment.
+
 ## What's next
 1. Run the speed test on the treasurer's computer.
-2. Add the model as an "AI suggestion" for the yellow lines on the bookkeeping page – the treasurer accepts or corrects it.
-3. Test on new 2026/27 lines, including rule + model combined.
+2. Measure the page on new 2026/27 lines as they come in – the first clean test, since the descriptions were written after seeing the old lines.
+3. Rule + model combined (e.g. Café Globen vouchers by amount) – tested on new lines only.
 
 ## Files
 | File | What it does |
@@ -93,6 +111,7 @@ On the older PC the real prompts did not run at all. Two problems were met on th
 | `train_eval.py` | Experiment 1: scikit-learn model vs baseline. `--no-text` = date and amount only. |
 | `llm_eval.py` | Experiment 2, version 1: Qwen3 via Ollama, no club knowledge. |
 | `llm_eval_v2.py` | Experiment 2, version 2: with post-type descriptions and other-year examples. |
+| `llm_eval_v3.py` | Experiment 4: the model's confidence (log probabilities) – how many lines could be booked automatically, and how many of those would be wrong. |
 | `export_browser_test.py` | Writes the same prompts as `llm_eval_v2.py` to a local JSON file for the browser test. |
 | `browser_test.html` | Experiment 3: the real test in the browser (reads the local JSON file; nothing is uploaded). |
 | `speed_test.html` | Length test with dummy text – open it on any computer. |

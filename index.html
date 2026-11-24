@@ -436,9 +436,9 @@ function renderAiBox() {
     box.dataset.built = "yes";
     box.innerHTML = `<h3>AI suggestions for the yellow lines (optional)</h3>
       <p class="legend">An AI model can suggest a category for yellow lines that have a bank text. It runs here in your browser –
-        nothing is uploaded. It learns from the club's earlier years: add the <b>Statements</b> tabs of earlier years
+        nothing is uploaded. It uses examples from the club's earlier years: add the <b>Statements</b> tabs of earlier years
         (in the Google Sheet: open a Statements tab → <b>File → Download → CSV</b>; you can choose several files).
-        The first time, the model is downloaded (about 2 GB).</p>
+        The first time, the model is downloaded (about 1 GB).</p>
       <label class="drop">Drag earlier Statements files (CSV) here, or click to choose them<input type="file" accept=".csv" multiple></label>
       <p><button id="ai-run" type="button" disabled></button><button id="ai-confirm-all" type="button"></button></p>
       <p id="ai-status"></p>`;

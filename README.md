@@ -24,7 +24,7 @@ This page books what it can recognise and leaves only the rest to the treasurer.
    - a Zettle payout is matched by amount and date and split by payment time (class time, the Globen social on the first Friday) plus the fee,
    - the event (Globen, Beginner classes) is filled in where it is known.
 3. **Leaves the rest to the treasurer** in a review table: yellow lines need a category, every automatic line shows *why* it was booked and can be changed.
-4. **AI suggestions for the yellow lines (optional):** an open-source language model (Qwen3 1.7B, via [WebLLM](https://github.com/mlc-ai/web-llm)) runs in the treasurer's browser and suggests a category for lines that have a bank text. It learns from the club's earlier years: the treasurer adds earlier Statements tabs as CSV, and real lines from them go into the prompt as examples, together with a one-line description of each post type. Nothing is uploaded. **Every suggestion must be confirmed** (one by one or "Confirm all"); the download is blocked until it is. A line whose bank text is only a long transfer reference is not sent to the AI – the page says it looks like a MobilePay payout missing from the MobilePay file. In the test it was right 38 of 87 times against 28 for a simple rule – see [ai-experiment](ai-experiment/) for how it was measured, and why it is not allowed to book on its own.
+4. **AI suggestions for the yellow lines (optional):** an open-source language model (Qwen3 1.7B, via [WebLLM](https://github.com/mlc-ai/web-llm)) runs in the treasurer's browser and suggests a category for lines that have a bank text. It uses examples from the club's earlier years: the treasurer adds earlier Statements tabs as CSV, and real lines from them go into the prompt as examples, together with a one-line description of each post type. Nothing is uploaded. **Every suggestion must be confirmed** (one by one or "Confirm all"); the download is blocked until it is. A line whose bank text is only a long transfer reference is not sent to the AI – the page says it looks like a MobilePay payout missing from the MobilePay file. In the experiment behind it, the same model in the browser was right 38 of 87 times against 28 for a simple rule; the page's version has so far had a 3-line real test. See [ai-experiment](ai-experiment/) for how it was measured, and why it is not allowed to book on its own.
 5. **Checks before the file is made:** every line has a category, one financial year (1 August – 31 July), and the bookings end at the bank's own balance. A bank file with a missing line is refused when it is added.
 6. **Instructor contracts:** for each workshop with an instructor payment, it compares what was paid with the contract (a % of the profit, or a fixed amount) and warns if they differ.
 7. **Save progress** to a file and continue later, on any computer.
@@ -70,6 +70,18 @@ python test_ai_suggest.py
 | `ai-experiment/` | How the AI was chosen and measured (scripts, results, browser speed test) |
 | `year_end.py`, `read_review.py`, `run.py` | The command-line version the page grew out of |
 | `read_documents.py` | Reads BilletFix statements (not used by the page yet) |
+
+## How it was built
+
+Built step by step from 12 to 24 November 2026, with the club's real files as the test case (never committed):
+
+1. **Command-line scripts** (12–14 Nov): read the bank, MobilePay and Zettle files, match payouts to the bank lines (MobilePay by its full transfer reference, Zettle by amount and date) and book them, with tests on made-up data.
+2. **This web page** (15 Nov): the same Python code running in the browser with Pyodide, and output in the exact layout of the club's Google Sheet.
+3. **What the treasurer needs** (16 Nov): checks before download (one financial year, every line has a category, the bank balance adds up), Friday rules (Globen and Volver), events, instructor contracts and a progress file.
+4. **The AI experiment** (22–24 Nov, [ai-experiment](ai-experiment/)): classic machine learning, a local language model with and without the club's knowledge, the model in the browser, and its confidence – every result measured against a simple rule.
+5. **AI suggestions in the page** (24 Nov): tested in the browser with a fake model and then with the real model on the current year's files; the two mistakes it made were fixed before publishing.
+
+The public history starts with the first public version: the earlier development commits contained real payment references from the club and were not published.
 
 ## Status
 
